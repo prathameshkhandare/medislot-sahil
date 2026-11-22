@@ -4,6 +4,7 @@ const blogSchema = new mongoose.Schema({
   title: { type: String, required: true },
   content: { type: String, required: true },
   author: { type: String, required: true },
+  docId: { type: String, default: '' },   // ← doctor who wrote it
   image: { type: String, required: true },
   category: { type: String, required: true },
 }, { timestamps: true })

@@ -3,6 +3,14 @@ import bcrypt from "bcrypt";
 import doctorModel from "../models/doctorModel.js";
 import appointmentModel from "../models/appointmentModel.js";
 import sendMail from '../utils/sendMail.js';
+import razorpay from 'razorpay';
+
+const getRazorpayInstance = () => {
+    return new razorpay({
+        key_id: process.env.RAZORPAY_KEY_ID,
+        key_secret: process.env.RAZORPAY_KEY_SECRET,
+    });
+};
 
 
 // API for doctor Login 
@@ -98,8 +106,58 @@ const appointmentCancel = async (req, res) => {
       // Update the appointment status - IMPORTANT: Update both status and cancelled flag
       appointment.status = "Cancelled";
       appointment.cancelled = true;
+  
+      // Handle Automatic Refund if payment was completed online
+      let refundMessage = "";
+      if (appointment.payment && !appointment.isRefunded) {
+        try {
+          const razorpayInstance = getRazorpayInstance();
+          let targetPaymentId = appointment.paymentId;
+  
+          // If paymentId not on record, find recent captured payment for this amount
+          if (!targetPaymentId) {
+            console.log("Searching captured payments for appointment:", appointmentId);
+            const allPayments = await razorpayInstance.payments.all({ count: 10 });
+            const match = allPayments.items.find(p => p.status === "captured" && p.amount === appointment.amount * 100);
+            if (match) {
+              targetPaymentId = match.id;
+            }
+          }
+  
+          if (targetPaymentId) {
+            const refundResponse = await razorpayInstance.payments.refund(targetPaymentId, {
+              amount: appointment.amount * 100,
+              notes: {
+                reason: "Cancelled by Doctor",
+                appointmentId: appointmentId.toString(),
+              }
+            });
+  
+            appointment.isRefunded = true;
+            appointment.refundId = refundResponse.id || "";
+            appointment.paymentId = targetPaymentId;
+            console.log("Automatic refund processed successfully:", refundResponse.id);
+            refundMessage = ` A full refund of ₹${appointment.amount} has been initiated to your original payment method.`;
+          } else {
+            console.log("Could not locate payment ID for refund.");
+          }
+        } catch (refundErr) {
+          console.error("Razorpay automatic refund error:", refundErr);
+          refundMessage = " Please note our support team will process your refund manually.";
+        }
+      }
+  
       await appointment.save();
       console.log("Appointment status updated to Cancelled");
+  
+      // Free up the doctor slot
+      const { docId: dId, slotDate, slotTime } = appointment;
+      const doctorData = await doctorModel.findById(dId);
+      if (doctorData && doctorData.slots_booked && doctorData.slots_booked[slotDate]) {
+        let slots_booked = doctorData.slots_booked;
+        slots_booked[slotDate] = slots_booked[slotDate].filter(e => e !== slotTime);
+        await doctorModel.findByIdAndUpdate(dId, { slots_booked });
+      }
   
       // Get user email directly from userData
       const userEmail = appointment.userData?.email;
@@ -108,18 +166,22 @@ const appointmentCancel = async (req, res) => {
       if (userEmail) {
         await sendMail(
           userEmail,
-          "Appointment Cancelled",
+          "Appointment Cancelled and Refund Initiated",
           `Dear Patient, 
 
-We regret to inform you that your upcoming appointment on ${appointment.slotDate} at ${appointment.slotTime} has been canceled due to unforeseen circumstances.
-We sincerely apologize for the inconvenience. Please contact us at your earliest convenience to reschedule your appointment. Your health is important to us, and we’ll do our best to accommodate your preferred time.
+We regret to inform you that your upcoming appointment on ${appointment.slotDate} at ${appointment.slotTime} has been canceled due to unforeseen circumstances.${refundMessage}
+
+We sincerely apologize for the inconvenience. Please contact us or book a new appointment at your convenience.
 
 Thank you for your understanding.`
         );
         console.log("Cancellation email sent successfully to", userEmail);
       }
   
-      res.json({ success: true, message: "Appointment cancelled successfully." });
+      res.json({
+        success: true,
+        message: `Appointment cancelled successfully.${appointment.isRefunded ? " Refund initiated." : ""}`
+      });
     } catch (error) {
       console.error("Error in appointmentCancel controller:", error);
       res.json({ success: false, message: error.message });
@@ -211,7 +273,17 @@ const doctorList = async (req, res) => {
     try {
 
         const doctors = await doctorModel.find({}).select(['-password', '-email'])
-        res.json({ success: true, doctors })
+
+        // For each doctor, count their completed appointments
+        const doctorsWithStats = await Promise.all(doctors.map(async (doc) => {
+            const completedCount = await appointmentModel.countDocuments({
+                docId: doc._id.toString(),
+                isCompleted: true
+            })
+            return { ...doc.toObject(), completedAppointments: completedCount }
+        }))
+
+        res.json({ success: true, doctors: doctorsWithStats })
 
     } catch (error) {
         console.log(error)

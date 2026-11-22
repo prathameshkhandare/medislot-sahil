@@ -46,7 +46,44 @@ const appointmentCancel = async (req, res) => {
     try {
 
         const { appointmentId } = req.body
-        await appointmentModel.findByIdAndUpdate(appointmentId, { cancelled: true })
+        const appointmentData = await appointmentModel.findById(appointmentId)
+
+        if (!appointmentData) {
+            return res.json({ success: false, message: 'Appointment not found' })
+        }
+
+        // Automatic refund if paid online
+        if (appointmentData.payment && appointmentData.paymentId && !appointmentData.isRefunded) {
+            try {
+                const razorpay = (await import('razorpay')).default
+                const rzp = new razorpay({
+                    key_id: process.env.RAZORPAY_KEY_ID,
+                    key_secret: process.env.RAZORPAY_KEY_SECRET,
+                })
+                const refundRes = await rzp.payments.refund(appointmentData.paymentId, {
+                    amount: appointmentData.amount * 100,
+                    notes: { reason: "Cancelled by Admin", appointmentId }
+                })
+                await appointmentModel.findByIdAndUpdate(appointmentId, {
+                    cancelled: true,
+                    isRefunded: true,
+                    refundId: refundRes.id || ""
+                })
+            } catch (refErr) {
+                console.error("Admin cancellation refund error:", refErr)
+                await appointmentModel.findByIdAndUpdate(appointmentId, { cancelled: true })
+            }
+        } else {
+            await appointmentModel.findByIdAndUpdate(appointmentId, { cancelled: true })
+        }
+
+        const { docId, slotDate, slotTime } = appointmentData
+        const doctorData = await doctorModel.findById(docId)
+        if (doctorData && doctorData.slots_booked && doctorData.slots_booked[slotDate]) {
+            let slots_booked = doctorData.slots_booked
+            slots_booked[slotDate] = slots_booked[slotDate].filter(e => e !== slotTime)
+            await doctorModel.findByIdAndUpdate(docId, { slots_booked })
+        }
 
         res.json({ success: true, message: 'Appointment Cancelled' })
 

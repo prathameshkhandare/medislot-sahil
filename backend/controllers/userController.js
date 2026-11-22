@@ -10,10 +10,12 @@ import razorpay from 'razorpay';
 
 // Gateway Initialize
 const stripeInstance = new stripe(process.env.STRIPE_SECRET_KEY)
-const razorpayInstance = new razorpay({
-    key_id: process.env.RAZORPAY_KEY_ID,
-    key_secret: process.env.RAZORPAY_KEY_SECRET,
-})
+const getRazorpayInstance = () => {
+    return new razorpay({
+        key_id: process.env.RAZORPAY_KEY_ID,
+        key_secret: process.env.RAZORPAY_KEY_SECRET,
+    })
+}
 
 // API to register user
 const registerUser = async (req, res) => {
@@ -203,7 +205,26 @@ const cancelAppointment = async (req, res) => {
             return res.json({ success: false, message: 'Unauthorized action' })
         }
 
-        await appointmentModel.findByIdAndUpdate(appointmentId, { cancelled: true })
+        // Automatic refund if user cancels a paid appointment
+        if (appointmentData.payment && appointmentData.paymentId && !appointmentData.isRefunded) {
+            try {
+                const razorpayInstance = getRazorpayInstance()
+                const refundRes = await razorpayInstance.payments.refund(appointmentData.paymentId, {
+                    amount: appointmentData.amount * 100,
+                    notes: { reason: "Cancelled by User", appointmentId }
+                })
+                await appointmentModel.findByIdAndUpdate(appointmentId, {
+                    cancelled: true,
+                    isRefunded: true,
+                    refundId: refundRes.id || ""
+                })
+            } catch (refErr) {
+                console.error("User cancellation refund error:", refErr)
+                await appointmentModel.findByIdAndUpdate(appointmentId, { cancelled: true })
+            }
+        } else {
+            await appointmentModel.findByIdAndUpdate(appointmentId, { cancelled: true })
+        }
 
         // releasing doctor slot 
         const { docId, slotDate, slotTime } = appointmentData
@@ -250,10 +271,12 @@ const paymentRazorpay = async (req, res) => {
             return res.json({ success: false, message: 'Appointment Cancelled or not found' })
         }
 
+        const razorpayInstance = getRazorpayInstance()
+
         // creating options for razorpay payment
         const options = {
             amount: appointmentData.amount * 100,
-            currency: process.env.CURRENCY,
+            currency: process.env.CURRENCY || 'INR',
             receipt: appointmentId,
         }
 
@@ -263,7 +286,7 @@ const paymentRazorpay = async (req, res) => {
         res.json({ success: true, order })
 
     } catch (error) {
-        console.log(error)
+        console.log("Razorpay error:", error)
         res.json({ success: false, message: error.message })
     }
 }
@@ -271,18 +294,38 @@ const paymentRazorpay = async (req, res) => {
 // API to verify payment of razorpay
 const verifyRazorpay = async (req, res) => {
     try {
-        const { razorpay_order_id } = req.body
+        const { razorpay_order_id, razorpay_payment_id } = req.body
+        const razorpayInstance = getRazorpayInstance()
         const orderInfo = await razorpayInstance.orders.fetch(razorpay_order_id)
 
         if (orderInfo.status === 'paid') {
-            await appointmentModel.findByIdAndUpdate(orderInfo.receipt, { payment: true })
+            let actualPaymentId = razorpay_payment_id;
+
+            // If razorpay_payment_id was not passed from client, fetch from order's payments in Razorpay
+            if (!actualPaymentId) {
+                try {
+                    const orderPayments = await razorpayInstance.orders.fetchPayments(razorpay_order_id)
+                    if (orderPayments && orderPayments.items && orderPayments.items.length > 0) {
+                        actualPaymentId = orderPayments.items[0].id
+                    }
+                } catch (e) {
+                    console.log("Could not fetch payment ID from order payments:", e.message)
+                }
+            }
+
+            console.log("Saving appointment payment. Payment ID:", actualPaymentId)
+
+            await appointmentModel.findByIdAndUpdate(orderInfo.receipt, {
+                payment: true,
+                paymentId: actualPaymentId || ""
+            })
             res.json({ success: true, message: "Payment Successful" })
         }
         else {
             res.json({ success: false, message: 'Payment Failed' })
         }
     } catch (error) {
-        console.log(error)
+        console.log("Razorpay verify error:", error)
         res.json({ success: false, message: error.message })
     }
 }
