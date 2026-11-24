@@ -1,8 +1,9 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useContext } from "react"
 import { Loader2, Trash } from "lucide-react"
 import { useToast } from "../../components/ui/useToast"
+import { DoctorContext } from "../../context/DoctorContext"
 
 function BlogManagement() {
   const [blogs, setBlogs] = useState([])
@@ -17,10 +18,14 @@ function BlogManagement() {
     category: "",
   })
   const { toast } = useToast()
+  const { dToken, profileData, getProfileData } = useContext(DoctorContext)
 
   useEffect(() => {
     fetchBlogs()
-  }, [])
+    if (dToken && !profileData) {
+      getProfileData()
+    }
+  }, [dToken])
 
   const fetchBlogs = async () => {
     setLoading(true)
@@ -56,13 +61,12 @@ function BlogManagement() {
     setSubmitting(true)
     try {
       const API_URL = import.meta.env.VITE_BACKEND_URL
-      const token = localStorage.getItem("token")
 
       const response = await fetch(`${API_URL}/api/blog/write`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          dtoken: dToken,
         },
         body: JSON.stringify(newBlog),
       })
@@ -92,19 +96,22 @@ function BlogManagement() {
   }
 
   const deleteBlog = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this blog?")) return
+
     try {
       const API_URL = import.meta.env.VITE_BACKEND_URL
-      const token = localStorage.getItem("token")
 
       const response = await fetch(`${API_URL}/api/blog/delete/${id}`, {
         method: "DELETE",
         headers: {
-          Authorization: `Bearer ${token}`,
+          dtoken: dToken,
         },
       })
 
-      if (!response.ok) {
-        throw new Error("Failed to delete blog")
+      const data = await response.json()
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Failed to delete blog")
       }
 
       setBlogs(blogs.filter((blog) => blog._id !== id))
@@ -118,7 +125,7 @@ function BlogManagement() {
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to delete blog. Please try again.",
+        description: error.message || "Failed to delete blog. Please try again.",
       })
     }
   }
@@ -266,7 +273,9 @@ function BlogManagement() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {blogs.map((blog) => (
+                  {blogs.map((blog) => {
+                    const isOwner = profileData && (blog.docId === profileData._id)
+                    return (
                     <div key={blog._id} className="border rounded-lg p-4 hover:bg-gray-50">
                       <div className="flex items-start justify-between">
                         <div className="flex gap-4">
@@ -287,20 +296,30 @@ function BlogManagement() {
                               <span>By {blog.author}</span>
                               <span>•</span>
                               <span>Category: {blog.category}</span>
-                              
-                             
+                              {isOwner && (
+                                <span className="ml-2 bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[10px] font-semibold">
+                                  Your Post
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
-                        <button
-                          className="p-2 text-red-500 hover:bg-red-50 rounded-full"
-                          onClick={() => deleteBlog(blog._id)}
-                        >
-                          <Trash className="h-5 w-5" />
-                        </button>
+                        {isOwner ? (
+                          <button
+                            className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                            onClick={() => deleteBlog(blog._id)}
+                            title="Delete your blog"
+                          >
+                            <Trash className="h-5 w-5" />
+                          </button>
+                        ) : (
+                          <span className="text-xs text-gray-400 italic py-2 pr-2">
+                            Author only
+                          </span>
+                        )}
                       </div>
                     </div>
-                  ))}
+                  )})}
                 </div>
               )}
             </div>

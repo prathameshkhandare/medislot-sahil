@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
 
-const apiurl = import.meta.env.VITE_BACKEND_URL;
+const apiurl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:4000';
 
 const Blog = () => {
   const [blogs, setBlogs] = useState([]);

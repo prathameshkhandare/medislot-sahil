@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Background circle -->
+  <circle cx="50" cy="50" r="50" fill="#dce3ff"/>
+  <!-- Body -->
+  <ellipse cx="50" cy="80" rx="22" ry="13" fill="#6c8ef5"/>
+  <!-- Head -->
+  <circle cx="50" cy="38" r="15" fill="#f5c5a3"/>
+  <!-- Hair -->
+  <ellipse cx="50" cy="25" rx="15" ry="7" fill="#2c2c2c"/>
+  <!-- Eyes -->
+  <circle cx="44" cy="37" r="2" fill="#333"/>
+  <circle cx="56" cy="37" r="2" fill="#333"/>
+  <!-- Smile -->
+  <path d="M44 45 Q50 50 56 45" stroke="#c87941" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+  <!-- Body silhouette with acne dots (physio massage hands) -->
+  <!-- Hands doing shoulder massage -->
+  <ellipse cx="34" cy="62" rx="7" ry="5" fill="#f5c5a3" transform="rotate(-20,34,62)"/>
+  <ellipse cx="66" cy="62" rx="7" ry="5" fill="#f5c5a3" transform="rotate(20,66,62)"/>
+  <!-- Person sitting (back) -->
+  <rect x="43" y="57" width="14" height="20" rx="5" fill="#8da5f7"/>
+  <!-- Spine indicator -->
+  <line x1="50" y1="59" x2="50" y2="75" stroke="white" stroke-width="1.5" stroke-dasharray="2,2"/>
+</svg>

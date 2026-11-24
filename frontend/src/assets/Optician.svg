@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Background circle -->
+  <circle cx="50" cy="50" r="50" fill="#dce3ff"/>
+  <!-- Body -->
+  <ellipse cx="50" cy="80" rx="22" ry="13" fill="#6c8ef5"/>
+  <!-- Head -->
+  <circle cx="50" cy="38" r="15" fill="#f5c5a3"/>
+  <!-- Hair -->
+  <ellipse cx="50" cy="25" rx="15" ry="7" fill="#4a3728"/>
+  <!-- Eyes with glasses frames -->
+  <!-- Left glass -->
+  <rect x="38" y="34" width="10" height="8" rx="4" fill="none" stroke="#555" stroke-width="2"/>
+  <!-- Right glass -->
+  <rect x="52" y="34" width="10" height="8" rx="4" fill="none" stroke="#555" stroke-width="2"/>
+  <!-- Bridge -->
+  <line x1="48" y1="38" x2="52" y2="38" stroke="#555" stroke-width="1.8"/>
+  <!-- Temple arms -->
+  <line x1="38" y1="38" x2="35" y2="38" stroke="#555" stroke-width="1.8"/>
+  <line x1="62" y1="38" x2="65" y2="38" stroke="#555" stroke-width="1.8"/>
+  <!-- Pupils -->
+  <circle cx="43" cy="38" r="1.5" fill="#333"/>
+  <circle cx="57" cy="38" r="1.5" fill="#333"/>
+  <!-- Smile -->
+  <path d="M44 46 Q50 51 56 46" stroke="#c87941" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+  <!-- Eye chart -->
+  <rect x="38" y="58" width="24" height="18" rx="2" fill="white" opacity="0.9"/>
+  <text x="50" y="66" text-anchor="middle" font-size="5" fill="#333" font-family="Arial">E</text>
+  <text x="50" y="71" text-anchor="middle" font-size="4" fill="#555" font-family="Arial">F P</text>
+  <text x="50" y="75" text-anchor="middle" font-size="3" fill="#777" font-family="Arial">T O Z</text>
+</svg>

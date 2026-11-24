@@ -56,32 +56,53 @@ const MyAppointments = () => {
     }
 
     const initPay = (order) => {
+        const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_TuTZzTGPuYDPwS'
+
+        if (!window.Razorpay) {
+            toast.error('Razorpay SDK failed to load. Please check your internet connection.')
+            return
+        }
+
         const options = {
-            key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+            key: razorpayKey,
             amount: order.amount,
-            currency: order.currency,
-            name: 'Appointment Payment',
+            currency: order.currency || 'INR',
+            name: 'MediSlot Appointment',
             description: "Appointment Payment",
             order_id: order.id,
             receipt: order.receipt,
             handler: async (response) => {
-
-                console.log(response)
-
+                console.log("Razorpay response:", response)
                 try {
                     const { data } = await axios.post(backendUrl + "/api/user/verifyRazorpay", response, { headers: { token } });
                     if (data.success) {
-                        navigate('/my-appointments')
+                        toast.success(data.message || 'Payment Successful!')
                         getUserAppointments()
+                    } else {
+                        toast.error(data.message || 'Payment verification failed')
                     }
                 } catch (error) {
                     console.log(error)
                     toast.error(error.message)
                 }
+            },
+            modal: {
+                ondismiss: function () {
+                    console.log('Payment modal dismissed')
+                }
             }
         };
-        const rzp = new window.Razorpay(options);
-        rzp.open();
+
+        try {
+            const rzp = new window.Razorpay(options);
+            rzp.on('payment.failed', function (response) {
+                toast.error(response.error.description || 'Payment Failed');
+            });
+            rzp.open();
+        } catch (err) {
+            console.error('Razorpay open error:', err)
+            toast.error('Unable to open payment modal')
+        }
     };
 
     // Function to make payment using razorpay
@@ -150,7 +171,20 @@ const MyAppointments = () => {
                             {item.isCompleted && <button className='sm:min-w-48 py-2 border border-green-500 rounded text-green-500'>Completed</button>}
 
                             {!item.cancelled && !item.isCompleted && <button onClick={() => cancelAppointment(item._id)} className='text-[#696969] sm:min-w-48 py-2 border rounded hover:bg-red-600 hover:text-white transition-all duration-300'>Cancel appointment</button>}
-                            {item.cancelled && !item.isCompleted && <button className='sm:min-w-48 py-2 border border-red-500 rounded text-red-500'>Appointment cancelled</button>}
+                            {item.cancelled && !item.isCompleted && (
+                                <div className='flex flex-col gap-1'>
+                                    <button className='sm:min-w-48 py-2 border border-red-500 rounded text-red-500'>Appointment cancelled</button>
+                                    {item.isRefunded ? (
+                                        <span className='text-xs text-green-600 font-medium bg-green-50 py-1 px-2 rounded border border-green-200'>
+                                            ✓ Refund Initiated (₹{item.amount})
+                                        </span>
+                                    ) : item.payment ? (
+                                        <span className='text-xs text-amber-600 font-medium bg-amber-50 py-1 px-2 rounded border border-amber-200'>
+                                            Refund in progress
+                                        </span>
+                                    ) : null}
+                                </div>
+                            )}
                         </div>
                     </div>
                 ))}
